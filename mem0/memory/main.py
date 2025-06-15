@@ -1003,7 +1003,7 @@ class Memory(MemoryBase):
 
         prev_value = existing_memory.payload.get("data")
 
-        new_metadata = deepcopy(metadata) if metadata is not None else {}
+        new_metadata = metadata or {}
 
         new_metadata["data"] = data
         new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
@@ -1262,7 +1262,6 @@ class AsyncMemory(MemoryBase):
                     continue
 
                 per_msg_meta = deepcopy(metadata)
-                per_msg_meta["role"] = message_dict["role"]
 
                 actor_name = message_dict.get("name")
                 if actor_name:
@@ -1282,7 +1281,6 @@ class AsyncMemory(MemoryBase):
                         "memory": msg_content,
                         "event": "ADD",
                         "actor_id": actor_name if actor_name else None,
-                        "role": message_dict["role"],
                     }
                 )
             return returned_memories
