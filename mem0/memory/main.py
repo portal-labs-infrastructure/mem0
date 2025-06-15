@@ -19,7 +19,7 @@ from mem0.configs.enums import MemoryType
 from mem0.configs.prompts import (
     DEFAULT_UPDATE_MEMORY_PROMPT,
     PROCEDURAL_MEMORY_SYSTEM_PROMPT,
-    get_update_memory_messages,
+    get_update_memory_messages_prompt,
 )
 from mem0.memory.base import MemoryBase
 from mem0.memory.setup import mem0_dir, setup_config
@@ -386,7 +386,7 @@ class Memory(MemoryBase):
             system_prompt = (
                 self.custom_update_memory_prompt or DEFAULT_UPDATE_MEMORY_PROMPT
             )
-            function_calling_prompt = get_update_memory_messages(
+            update_memory_messages_prompt = get_update_memory_messages_prompt(
                 retrieved_old_memory,
                 new_retrieved_facts,
             )
@@ -395,7 +395,7 @@ class Memory(MemoryBase):
                 response: str = self.llm.generate_response(
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": function_calling_prompt},
+                        {"role": "user", "content": update_memory_messages_prompt},
                     ],
                     response_format={"type": "json_object"},
                 )
@@ -414,7 +414,7 @@ class Memory(MemoryBase):
 
         returned_memories = []
         try:
-            for resp in new_memories_with_actions.get("memories", []):
+            for resp in new_memories_with_actions.get("actions", []):
                 logging.info(resp)
                 try:
                     action_text = resp.get("text")
@@ -1352,7 +1352,7 @@ class AsyncMemory(MemoryBase):
             system_prompt = (
                 self.custom_update_memory_prompt or DEFAULT_UPDATE_MEMORY_PROMPT
             )
-            function_calling_prompt = get_update_memory_messages(
+            update_memory_messages_prompt = get_update_memory_messages_prompt(
                 retrieved_old_memory,
                 new_retrieved_facts,
             )
@@ -1361,7 +1361,7 @@ class AsyncMemory(MemoryBase):
                     self.llm.generate_response,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": function_calling_prompt},
+                        {"role": "user", "content": update_memory_messages_prompt},
                     ],
                     response_format={"type": "json_object"},
                 )
@@ -1378,7 +1378,7 @@ class AsyncMemory(MemoryBase):
         returned_memories = []
         try:
             memory_tasks = []
-            for resp in new_memories_with_actions.get("memories", []):
+            for resp in new_memories_with_actions.get("actions", []):
                 logging.info(resp)
                 try:
                     action_text = resp.get("text")

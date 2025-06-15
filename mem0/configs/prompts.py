@@ -66,9 +66,9 @@ You should detect the language of the user input and record the facts in the sam
 """
 
 DEFAULT_UPDATE_MEMORY_PROMPT = """You are a smart memory manager which controls the memories of a system.
-You can perform four operations: (1) add a memory, (2) update a memory, (3) delete a memory, and (4) no change.
+You can perform four actions: (1) add a memory, (2) update a memory, (3) delete a memory, and (4) no change.
 
-Based on the above four operations, the memories will change.
+Based on the above four actions, the memories will change.
 
 Compare newly retrieved facts with existing memories. For each new fact, decide whether to:
 - ADD: Add it as a new memory
@@ -88,9 +88,9 @@ There are specific guidelines to select which operation to perform:
             }
         ]
     - Facts: ["John specializes in AI"]
-    - New Memories:
+    - Actions:
         {
-            "memories" : [
+            "actions" : [
                 {
                     "id" : "0",
                     "text" : "John is a software engineer",
@@ -125,9 +125,9 @@ Return the same IDs in the output as were shown in the input IDs, and **do not**
             }
         ]
     - Facts: ["I love chicken pizza", "John loves to play cricket with friends"]
-    - New Memories:
+    - Actions:
         {
-            "memories" : [
+            "actions" : [
                 {
                     "id" : "0",
                     "text" : "I love cheese and chicken pizza",
@@ -165,9 +165,9 @@ Please note to return the same IDs in the output as were shown in the input IDs,
             }
         ]
     - Facts: ["John dislikes cheese pizza"]
-    - New Memories:
+    - Actions:
         {
-            "memories" : [
+            "actions" : [
                 {
                     "id" : "0",
                     "text" : "John is a software engineer",
@@ -195,9 +195,9 @@ Please note to return the same IDs in the output as were shown in the input IDs,
             }
         ]
     - Facts: ["John is a software engineer"]
-    - New Memories:
+    - Actions:
         {
-            "memories" : [
+            "actions" : [
                 {
                     "id" : "0",
                     "text" : "John is a software engineer",
@@ -292,14 +292,14 @@ You are a memory summarization system that records and preserves the complete in
 """
 
 
-def get_update_memory_messages(retrieved_old_memory_dict, response_content):
-    return f"""Below is the current content of my memory which I have collected till now.
+def get_update_memory_messages_prompt(retrieved_old_memory_dict, response_content):
+    return f"""Below are my memories which I have collected until now.
 
     ```
     {retrieved_old_memory_dict}
     ```
 
-    Here are some new facts. You have to analyze these new facts and determine whether they should be added, updated, or deleted in the memory.
+    Here are the new facts. You must analyze these new facts and decide which actions to perform.
 
     ```
     {response_content}
@@ -308,7 +308,7 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
     You must return your response in the following JSON structure only:
 
     {{
-        "memory" : [
+        "actions" : [
             {{
                 "id" : "<ID of the memory>",                # Use existing ID for updates/deletes, or new ID for additions
                 "text" : "<Content of the memory>",         # Content of the memory
@@ -320,12 +320,10 @@ def get_update_memory_messages(retrieved_old_memory_dict, response_content):
     }}
 
     Follow the instruction mentioned below:
+
     - Do not return anything from the custom few shot prompts provided above.
-    - If the current memory is empty, then you have to add the new retrieved facts to the memory.
-    - You should return the updated memory in only JSON format as shown above. The memory key should be the same if no changes are made.
-    - If there is an addition, generate a new key and add the new memory corresponding to it.
-    - If there is a deletion, the memory key-value pair should be removed from the memory.
-    - If there is an update, the ID key should remain the same and only the value needs to be updated.
+    - If the current memories are empty, then you have to add the new retrieved facts.
+    - You should return the actions in JSON format only, as shown above.
 
     Do not return anything except the JSON format.
     """
