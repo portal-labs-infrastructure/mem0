@@ -18,7 +18,6 @@ from mem0.configs.base import MemoryConfig, MemoryItem
 from mem0.configs.enums import MemoryType
 from mem0.configs.prompts import (
     DEFAULT_UPDATE_MEMORY_PROMPT,
-    FACT_RETRIEVAL_PROMPT,
     PROCEDURAL_MEMORY_SYSTEM_PROMPT,
     get_update_memory_messages,
 )
@@ -365,7 +364,7 @@ class Memory(MemoryBase):
             existing_memories = self.vector_store.search(
                 query=new_mem,
                 vectors=messages_embeddings,
-                limit=5,
+                limit=10,
                 filters=filters,
             )
             for mem in existing_memories:
@@ -415,7 +414,7 @@ class Memory(MemoryBase):
 
         returned_memories = []
         try:
-            for resp in new_memories_with_actions.get("memory", []):
+            for resp in new_memories_with_actions.get("memories", []):
                 logging.info(resp)
                 try:
                     action_text = resp.get("text")
@@ -1379,7 +1378,7 @@ class AsyncMemory(MemoryBase):
         returned_memories = []
         try:
             memory_tasks = []
-            for resp in new_memories_with_actions.get("memory", []):
+            for resp in new_memories_with_actions.get("memories", []):
                 logging.info(resp)
                 try:
                     action_text = resp.get("text")
