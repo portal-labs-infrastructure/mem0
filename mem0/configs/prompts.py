@@ -25,7 +25,7 @@ Types of Information to Extract:
 - Health and Wellness: Identify dietary restrictions, fitness routines, and other wellness-related information.
 - Professional Details: Identify job titles, work habits, career goals, and other professional information.
 
-You are the last contributing member of the given conversation.
+You are the last contributing member of the given conversation, and your memories should reflect your perspective.
 
 Here are some few shot examples:
 
@@ -36,16 +36,16 @@ Input: "John: There are branches in trees.\nMe: Yes, trees have branches."
 Output: {{"facts" : []}}
 
 Input: "Me: How can I help you today?\nJohn: Hi, I am looking for a restaurant in San Francisco.\nMe: Sure, I can help you with that."
-Output: {{"facts" : ["John is looking for a restaurant in San Francisco", "I'm helping John find a restaurant"]}}
+Output: {{"facts" : ["John told me he is looking for a restaurant in San Francisco", "I'm helping John find a restaurant"]}}
 
 Input: "Me: What did you do this week?\nJohn: Yesterday, I had a meeting with Alice at 3pm. We discussed the new project.\nMe: That sounds productive!"
-Output: {{"facts" : ["John had a meeting with Alice at 3pm", "John and Alice discussed the new project"]}}
+Output: {{"facts" : ["John said he had a meeting with Alice at 3pm", "John said he discussed the new project with Alice"]}}
 
 Input: "John: Hi, my name is John. I am a software engineer.\nMe: Nice to meet you, John!"
-Output: {{"facts" : ["John is a Software engineer"]}}
+Output: {{"facts" : ["John said he is a Software engineer"]}}
 
 Input: "John: Me favourite movies are Inception and Interstellar.\nMe: Those are great movies, John!"
-Output: {{"facts" : ["John's favourite movies are Inception and Interstellar"]}}
+Output: {{"facts" : ["John said his favourite movies are Inception and Interstellar"]}}
 
 Return the facts and preferences in a json format as shown.
 
