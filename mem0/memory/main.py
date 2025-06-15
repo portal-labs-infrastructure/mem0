@@ -429,7 +429,7 @@ class Memory(MemoryBase):
                         memory_id = self._create_memory(
                             data=action_text,
                             existing_embeddings=new_message_embeddings,
-                            metadata=deepcopy(metadata),
+                            metadata=metadata,
                         )
                         returned_memories.append(
                             {
@@ -443,7 +443,7 @@ class Memory(MemoryBase):
                             memory_id=temp_uuid_mapping[resp.get("id")],
                             data=action_text,
                             existing_embeddings=new_message_embeddings,
-                            metadata=deepcopy(metadata),
+                            metadata=metadata,
                         )
                         returned_memories.append(
                             {
@@ -914,22 +914,43 @@ class Memory(MemoryBase):
         )
         return self.db.get_history(memory_id)
 
-    def _create_memory(self, data, existing_embeddings, metadata=None):
-        logging.debug(f"Creating memory with {data=}")
+    def _create_memory(
+        self, data: str, existing_embeddings: dict, metadata: dict = None
+    ):
+        logging.debug(f"Creating memory with data='{data}'")
+
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
         else:
+            # Assuming self.embedding_model.embed exists and works as expected
             embeddings = self.embedding_model.embed(data, memory_action="add")
+
         memory_id = str(uuid.uuid4())
-        metadata = metadata or {}
-        metadata["data"] = data
-        metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        metadata["created_at"] = datetime.now(timezone.utc).isoformat()
+
+        # --- Construct the payload metadata safely ---
+        # Start with a copy of the provided metadata (if any) to avoid modifying the original.
+        # Use deepcopy if metadata can contain nested mutable structures that also shouldn't be shared.
+        # If metadata is expected to be flat or shallow copy is sufficient:
+        # base_metadata = metadata.copy() if metadata else {}
+        base_metadata = deepcopy(metadata) if metadata else {}
+
+        # Prepare the payload for the vector store, adding new fields
+        # without altering base_metadata directly if it's from the caller.
+        # Instead, create a new dictionary for the payload.
+        payload_for_vector_store = {
+            **base_metadata,  # Spread the copied/provided metadata first
+            "data": data,  # Override or add 'data'
+            "hash": hashlib.md5(data.encode()).hexdigest(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            # Add any other fields specific to the vector store payload here
+        }
+
+        logging.debug(f"Payload for vector store: {payload_for_vector_store}")
 
         self.vector_store.insert(
-            vectors=[embeddings],
+            vectors=[embeddings],  # Assuming embeddings is a single vector
             ids=[memory_id],
-            payloads=[metadata],
+            payloads=[payload_for_vector_store],  # Pass the newly constructed payload
         )
         self.db.add_history(
             memory_id,
@@ -990,44 +1011,98 @@ class Memory(MemoryBase):
 
         return result
 
-    def _update_memory(self, memory_id, data, existing_embeddings, metadata=None):
-        logger.info(f"Updating memory with {data=}")
+    def _update_memory(
+        self,
+        memory_id: str,
+        data: str,
+        existing_embeddings: dict,
+        metadata: dict = None,
+    ):
+        logger.info(f"Updating memory ID {memory_id} with new data.")
 
         try:
+            # Assuming vector_store.get returns an object with a 'payload' attribute (dict)
             existing_memory = self.vector_store.get(vector_id=memory_id)
-        except Exception:
-            logger.error(f"Error getting memory with ID {memory_id} during update.")
+            if not existing_memory or not hasattr(existing_memory, "payload"):
+                logger.error(
+                    f"Memory with ID {memory_id} not found or has invalid structure."
+                )
+                raise ValueError(f"Memory with ID {memory_id} not found.")
+            existing_payload = existing_memory.payload
+        except Exception as e:
+            logger.error(f"Error getting memory with ID {memory_id} during update: {e}")
+            # Re-raise as ValueError or a custom exception
             raise ValueError(
-                f"Error getting memory with ID {memory_id}. Please provide a valid 'memory_id'"
+                f"Error getting memory with ID {memory_id}. Please provide a valid 'memory_id'."
+            ) from e
+
+        prev_value = existing_payload.get("data")
+        # --- Construct the new payload safely ---
+
+        # 1. Start with a copy of the existing payload. This preserves all original fields.
+        payload_for_vector_store = (
+            existing_payload.copy()
+        )  # Shallow copy is often okay for flat metadata
+
+        # 2. Merge changes from a deepcopy of caller-provided metadata (if any).
+        #    This allows the caller to update most fields.
+        #    Fields that are strictly preserved (like 'created_at') will be reset later.
+        if metadata:
+            caller_metadata_copy = deepcopy(metadata)
+            payload_for_vector_store.update(caller_metadata_copy)
+
+        # 3. Set/overwrite fields definitively managed by this update function.
+        #    These take precedence over anything from existing_payload or caller_metadata_copy.
+        payload_for_vector_store["data"] = data
+        payload_for_vector_store["hash"] = hashlib.md5(data.encode()).hexdigest()
+        payload_for_vector_store["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # 4. Strictly preserve/restore specific fields from the original existing_payload.
+        #    This ensures these fields cannot be changed by the 'metadata' argument
+        #    and reflect their original state or are managed systemically.
+
+        # Preserve 'created_at'
+        original_created_at = existing_payload.get("created_at")
+        if original_created_at:
+            payload_for_vector_store["created_at"] = original_created_at
+        else:
+            # This case is unusual for an update; 'created_at' should exist.
+            # Log a warning and set it if it was missing.
+            logger.warning(
+                f"Memory {memory_id} 'created_at' was missing. Setting it now during update."
             )
+            payload_for_vector_store["created_at"] = datetime.now(
+                timezone.utc
+            ).isoformat()
 
-        prev_value = existing_memory.payload.get("data")
+        # Preserve other fields as per original logic (user_id, agent_id, etc.)
+        # These fields, if they exist in the original payload, will be restored to their
+        # original values, effectively making them non-updatable via the 'metadata' param.
+        for key_to_preserve in ["user_id", "agent_id", "run_id", "actor_id"]:
+            if key_to_preserve in existing_payload:
+                payload_for_vector_store[key_to_preserve] = existing_payload[
+                    key_to_preserve
+                ]
+            # else: if it wasn't in existing_payload, but caller added it via metadata,
+            # it would remain from step 2. If the intent is to *only* have these fields
+            # if they were in the original, you might add an `elif key_to_preserve in payload_for_vector_store:
+            # del payload_for_vector_store[key_to_preserve]`
 
-        new_metadata = metadata or {}
-
-        new_metadata["data"] = data
-        new_metadata["hash"] = hashlib.md5(data.encode()).hexdigest()
-        new_metadata["created_at"] = existing_memory.payload.get("created_at")
-        new_metadata["updated_at"] = datetime.now(timezone.utc).isoformat()
-
-        if "user_id" in existing_memory.payload:
-            new_metadata["user_id"] = existing_memory.payload["user_id"]
-        if "agent_id" in existing_memory.payload:
-            new_metadata["agent_id"] = existing_memory.payload["agent_id"]
-        if "run_id" in existing_memory.payload:
-            new_metadata["run_id"] = existing_memory.payload["run_id"]
-        if "actor_id" in existing_memory.payload:
-            new_metadata["actor_id"] = existing_memory.payload["actor_id"]
-
+        # --- Embedding ---
         if data in existing_embeddings:
             embeddings = existing_embeddings[data]
         else:
-            embeddings = self.embedding_model.embed(data, "update")
+            # Assuming self.embedding_model.embed exists
+            embeddings = self.embedding_model.embed(data, memory_action="update")
+
+        logger.debug(
+            f"Final payload for updating memory {memory_id}: {payload_for_vector_store}"
+        )
 
         self.vector_store.update(
             vector_id=memory_id,
-            vector=embeddings,
-            payload=new_metadata,
+            vector=embeddings,  # Assuming embeddings is a single vector
+            payload=payload_for_vector_store,
         )
         logger.info(f"Updating memory with ID {memory_id=} with {data=}")
 
@@ -1036,9 +1111,9 @@ class Memory(MemoryBase):
             prev_value,
             data,
             "UPDATE",
-            created_at=new_metadata["created_at"],
-            updated_at=new_metadata["updated_at"],
-            actor_id=new_metadata.get("actor_id"),
+            created_at=payload_for_vector_store["created_at"],
+            updated_at=payload_for_vector_store["updated_at"],
+            actor_id=payload_for_vector_store.get("actor_id"),
         )
         capture_event(
             "mem0._update_memory", self, {"memory_id": memory_id, "sync_type": "sync"}
@@ -1389,7 +1464,7 @@ class AsyncMemory(MemoryBase):
                             self._create_memory(
                                 data=action_text,
                                 existing_embeddings=new_message_embeddings,
-                                metadata=deepcopy(metadata),
+                                metadata=metadata,
                             )
                         )
                         memory_tasks.append((task, resp, "ADD", None))
@@ -1399,7 +1474,7 @@ class AsyncMemory(MemoryBase):
                                 memory_id=temp_uuid_mapping[resp["id"]],
                                 data=action_text,
                                 existing_embeddings=new_message_embeddings,
-                                metadata=deepcopy(metadata),
+                                metadata=metadata,
                             )
                         )
                         memory_tasks.append(
