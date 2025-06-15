@@ -27,7 +27,9 @@ class SQLiteManager:
                 self.connection.execute("BEGIN")
                 cur = self.connection.cursor()
 
-                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='history'")
+                cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='history'"
+                )
                 if cur.fetchone() is None:
                     self.connection.execute("COMMIT")
                     return  # nothing to migrate
@@ -72,8 +74,7 @@ class SQLiteManager:
                         created_at   DATETIME,
                         updated_at   DATETIME,
                         is_deleted   INTEGER,
-                        actor_id     TEXT,
-                        role         TEXT
+                        actor_id     TEXT
                     )
                 """
                 )
@@ -82,7 +83,9 @@ class SQLiteManager:
                 intersecting = list(expected_cols & old_cols)
                 if intersecting:
                     cols_csv = ", ".join(intersecting)
-                    cur.execute(f"INSERT INTO history ({cols_csv}) SELECT {cols_csv} FROM history_old")
+                    cur.execute(
+                        f"INSERT INTO history ({cols_csv}) SELECT {cols_csv} FROM history_old"
+                    )
 
                 # Drop the old table
                 cur.execute("DROP TABLE history_old")
@@ -134,7 +137,6 @@ class SQLiteManager:
         updated_at: Optional[str] = None,
         is_deleted: int = 0,
         actor_id: Optional[str] = None,
-        role: Optional[str] = None,
     ) -> None:
         with self._lock:
             try:
@@ -143,9 +145,9 @@ class SQLiteManager:
                     """
                     INSERT INTO history (
                         id, memory_id, old_memory, new_memory, event,
-                        created_at, updated_at, is_deleted, actor_id, role
+                        created_at, updated_at, is_deleted, actor_id
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         str(uuid.uuid4()),
@@ -157,7 +159,6 @@ class SQLiteManager:
                         updated_at,
                         is_deleted,
                         actor_id,
-                        role,
                     ),
                 )
                 self.connection.execute("COMMIT")
@@ -171,7 +172,7 @@ class SQLiteManager:
             cur = self.connection.execute(
                 """
                 SELECT id, memory_id, old_memory, new_memory, event,
-                       created_at, updated_at, is_deleted, actor_id, role
+                       created_at, updated_at, is_deleted, actor_id
                 FROM history
                 WHERE memory_id = ?
                 ORDER BY created_at ASC, DATETIME(updated_at) ASC
@@ -191,7 +192,6 @@ class SQLiteManager:
                 "updated_at": r[6],
                 "is_deleted": bool(r[7]),
                 "actor_id": r[8],
-                "role": r[9],
             }
             for r in rows
         ]
