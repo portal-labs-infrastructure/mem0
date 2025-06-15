@@ -390,7 +390,6 @@ class Memory(MemoryBase):
             function_calling_prompt = get_update_memory_messages(
                 retrieved_old_memory,
                 new_retrieved_facts,
-                self.config.custom_update_memory_prompt,
             )
 
             try:
@@ -1351,15 +1350,20 @@ class AsyncMemory(MemoryBase):
             retrieved_old_memory[idx]["id"] = str(idx)
 
         if new_retrieved_facts:
+            system_prompt = (
+                self.custom_update_memory_prompt or DEFAULT_UPDATE_MEMORY_PROMPT
+            )
             function_calling_prompt = get_update_memory_messages(
                 retrieved_old_memory,
                 new_retrieved_facts,
-                self.config.custom_update_memory_prompt,
             )
             try:
                 response = await asyncio.to_thread(
                     self.llm.generate_response,
-                    messages=[{"role": "user", "content": function_calling_prompt}],
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": function_calling_prompt},
+                    ],
                     response_format={"type": "json_object"},
                 )
             except Exception as e:
