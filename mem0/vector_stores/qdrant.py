@@ -174,6 +174,7 @@ class Qdrant(VectorStoreBase):
             vector (list, optional): Updated vector. Defaults to None.
             payload (dict, optional): Updated payload. Defaults to None.
         """
+        print(f"qdrant_update : {payload}")
         point = PointStruct(id=vector_id, vector=vector, payload=payload)
         self.client.upsert(collection_name=self.collection_name, points=[point])
 
